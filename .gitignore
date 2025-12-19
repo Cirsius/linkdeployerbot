@@ -1,0 +1,5 @@
+bun.lock
+package
+bot-config.json
+user-date.json
+node_modules
