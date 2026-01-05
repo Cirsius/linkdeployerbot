@@ -10,7 +10,7 @@ const client = new Client({
   ]
 });
 
-client.once('ready', () => onReady(client));
+client.once('clientReady', () => onReady(client));
 
 client.on('interactionCreate', async interaction => {
   if (interaction.isButton()) {
