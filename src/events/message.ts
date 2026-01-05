@@ -1,5 +1,6 @@
 import type { Client, Message, TextChannel } from 'discord.js';
-import { config, userData, saveUserData, saveConfig } from '../config';
+import { config, saveConfig } from '../config';
+import { resetUser } from '../db';
 import { createEmbed } from '../utils/embed';
 
 export async function onMessageCreate(message: Message, client: Client): Promise<void> {
@@ -46,9 +47,12 @@ export async function onMessageCreate(message: Message, client: Client): Promise
       await message.reply('usage: !resetuser <user_id>');
       return;
     }
-    delete userData[userId];
-    saveUserData(userData);
-    await message.reply(`reset user data for ${userId}`);
+    const deleted = resetUser(userId);
+    if (deleted) {
+      await message.reply(`reset user data for ${userId}`);
+    } else {
+      await message.reply(`no data found for ${userId}`);
+    }
   }
 
   if (command === '!setchannel') {

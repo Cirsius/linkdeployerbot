@@ -4,12 +4,3 @@ export interface BotConfig {
   channelId: string;
   links: string[];
 }
-
-export interface UserEntry {
-  usedLinks: string[];
-  lastRequest: number;
-}
-
-export interface UserData {
-  [userId: string]: UserEntry;
-}
