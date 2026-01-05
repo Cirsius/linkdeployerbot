@@ -1,9 +1,25 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
+import { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel, ButtonInteraction } from 'discord.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const CONFIG_FILE = path.join(__dirname, 'bot-config.json');
-const DATA_FILE = path.join(__dirname, 'user-data.json');
+interface BotConfig {
+  token: string;
+  ownerId: string;
+  channelId: string;
+  links: string[];
+}
+
+interface UserEntry {
+  usedLinks: string[];
+  lastRequest: number;
+}
+
+interface UserData {
+  [userId: string]: UserEntry;
+}
+
+const CONFIG_FILE = path.join(import.meta.dir, 'bot-config.json');
+const DATA_FILE = path.join(import.meta.dir, 'user-data.json');
 
 const client = new Client({
   intents: [
@@ -13,11 +29,11 @@ const client = new Client({
   ]
 });
 
-function loadConfig() {
+function loadConfig(): BotConfig {
   if (fs.existsSync(CONFIG_FILE)) {
     return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
   }
-  const defaultConfig = {
+  const defaultConfig: BotConfig = {
     token: 'bot token',
     ownerId: 'ur user id',
     channelId: 'channel id',
@@ -29,14 +45,14 @@ function loadConfig() {
   return defaultConfig;
 }
 
-function loadUserData() {
+function loadUserData(): UserData {
   if (fs.existsSync(DATA_FILE)) {
     return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
   }
   return {};
 }
 
-function saveUserData(data) {
+function saveUserData(data: UserData): void {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
@@ -50,7 +66,7 @@ function createEmbed() {
     .setDescription('click the button below to get a link. you can request a new link once a week.')
     .setFooter({ text: 'links are sent in dms' });
 
-  const row = new ActionRowBuilder()
+  const row = new ActionRowBuilder<ButtonBuilder>()
     .addComponents(
       new ButtonBuilder()
         .setCustomId('get_link')
@@ -61,7 +77,7 @@ function createEmbed() {
   return { embeds: [embed], components: [row] };
 }
 
-function canGetLink(userId) {
+function canGetLink(userId: string): boolean {
   if (!userData[userId]) return true;
 
   const lastRequest = userData[userId].lastRequest;
@@ -69,26 +85,26 @@ function canGetLink(userId) {
   return Date.now() - lastRequest >= oneWeek;
 }
 
-function getNextLink(userId) {
-    if (!userData[userId]) {
-        userData[userId] = { usedLinks: [], lastRequest: 0 };
-    }
+function getNextLink(userId: string): string | null {
+  if (!userData[userId]) {
+    userData[userId] = { usedLinks: [], lastRequest: 0 };
+  }
 
-    const usedLinks = userData[userId].usedLinks || [];
-    const availableLinks = config.links.filter(link => !usedLinks.includes(link));
+  const usedLinks = userData[userId].usedLinks || [];
+  const availableLinks = config.links.filter(link => !usedLinks.includes(link));
 
-    if (availableLinks.length === 0) return null;
+  if (availableLinks.length === 0) return null;
 
-    const randomIndex = Math.floor(Math.random() * availableLinks.length);
-    const link = availableLinks[randomIndex];
-    userData[userId].usedLinks.push(link);
-    userData[userId].lastRequest = Date.now();
-    saveUserData(userData);
+  const randomIndex = Math.floor(Math.random() * availableLinks.length);
+  const link = availableLinks[randomIndex];
+  userData[userId].usedLinks.push(link);
+  userData[userId].lastRequest = Date.now();
+  saveUserData(userData);
 
-    return link;
+  return link;
 }
 
-function getTimeRemaining(userId) {
+function getTimeRemaining(userId: string): string {
   const lastRequest = userData[userId].lastRequest;
   const oneWeek = 7 * 24 * 60 * 60 * 1000;
   const timeLeft = oneWeek - (Date.now() - lastRequest);
@@ -100,12 +116,12 @@ function getTimeRemaining(userId) {
 }
 
 client.once('clientReady', async () => {
-  console.log(`logged in as ${client.user.tag}`);
+  console.log(`logged in as ${client.user?.tag}`);
 
-  const channel = client.channels.cache.get(config.channelId);
+  const channel = client.channels.cache.get(config.channelId) as TextChannel | undefined;
   if (channel) {
     const messages = await channel.messages.fetch({ limit: 10 });
-    const botMessage = messages.find(msg => msg.author.id === client.user.id);
+    const botMessage = messages.find(msg => msg.author.id === client.user?.id);
 
     if (botMessage) {
       await botMessage.edit(createEmbed());
@@ -118,12 +134,14 @@ client.once('clientReady', async () => {
 client.on('interactionCreate', async interaction => {
   if (!interaction.isButton()) return;
 
-  if (interaction.customId === 'get_link') {
-    const userId = interaction.user.id;
+  const buttonInteraction = interaction as ButtonInteraction;
+
+  if (buttonInteraction.customId === 'get_link') {
+    const userId = buttonInteraction.user.id;
 
     if (!canGetLink(userId)) {
       const timeLeft = getTimeRemaining(userId);
-      await interaction.reply({
+      await buttonInteraction.reply({
         content: `you can request another link in ${timeLeft}`,
         ephemeral: true
       });
@@ -133,7 +151,7 @@ client.on('interactionCreate', async interaction => {
     const link = getNextLink(userId);
 
     if (!link) {
-      await interaction.reply({
+      await buttonInteraction.reply({
         content: 'you alr got every link possible',
         ephemeral: true
       });
@@ -141,13 +159,13 @@ client.on('interactionCreate', async interaction => {
     }
 
     try {
-      await interaction.user.send(`${link}`);
-      await interaction.reply({
+      await buttonInteraction.user.send(`${link}`);
+      await buttonInteraction.reply({
         content: 'check ur dms for the link',
         ephemeral: true
       });
     } catch (error) {
-      await interaction.reply({
+      await buttonInteraction.reply({
         content: 'make sure ur dms are open. couldnt dm',
         ephemeral: true
       });
@@ -208,8 +226,10 @@ client.on('messageCreate', async message => {
     config.channelId = message.channel.id;
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 
-    const channel = client.channels.cache.get(config.channelId);
-    await channel.send(createEmbed());
+    const channel = client.channels.cache.get(config.channelId) as TextChannel | undefined;
+    if (channel) {
+      await channel.send(createEmbed());
+    }
     await message.reply('channel set and embed posted');
   }
 });
