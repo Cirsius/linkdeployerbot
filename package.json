@@ -1,7 +1,7 @@
 {
-  "main": "index.ts",
+  "main": "src/index.ts",
   "scripts": {
-    "start": "bun index.ts"
+    "start": "bun src/index.ts"
   },
   "dependencies": {
     "discord.js": "^14.14.1"
